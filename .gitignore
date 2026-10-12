@@ -1,0 +1,8 @@
+build/
+cmake-build-*/
+.cache/
+__pycache__/
+*.pyc
+.venv/
+*.o
+*.a
