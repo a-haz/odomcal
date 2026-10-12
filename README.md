@@ -62,6 +62,8 @@ Every number in the results below is copied from `docs/benchmark.csv`, which `od
 
 ## Results
 
+All results are from simulation, not from a physical robot. The systematic errors `Ed` and `Eb` in each row are injected into the simulated plant, so the true values are known and recovery can be checked directly. Real hardware adds effects (floor contact, non-constant slip, encoder quantization) that this simulator does not model.
+
 Mean over the `8` seeds (`row_type=mean`). Return error is `E_max,syst` in metres. Heading error is the mean absolute yaw of the return-position error, in degrees.
 
 | Ed | Eb | E_max before | heading before | E_max UMBmark | heading UMBmark | E_max least squares | heading least squares |
