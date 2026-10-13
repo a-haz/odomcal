@@ -1,0 +1,14 @@
+odom_calibrator:
+  ros__parameters:
+    joint_states_topic: joint_states
+    left_wheel_joint: left_wheel_joint
+    right_wheel_joint: right_wheel_joint
+    use_velocities: false
+    odom_topic: odom
+    odom_frame: odom
+    base_frame: base_link
+    publish_tf: true
+    calibration_file: ""
+    r_l: 0.05
+    r_r: 0.05
+    track_width: 0.30

@@ -1,0 +1,6 @@
+# Calibrated differential-drive geometry, in metres.
+# r_l and r_r are the left and right wheel radii.
+# track_width is the wheel baseline.
+r_l: 0.05
+r_r: 0.05
+track_width: 0.30

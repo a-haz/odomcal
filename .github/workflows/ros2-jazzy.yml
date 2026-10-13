@@ -1,0 +1,42 @@
+name: ROS 2 Jazzy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  colcon:
+    runs-on: ubuntu-latest
+    container:
+      image: ros:jazzy
+    steps:
+      - name: Install git and Cyclone DDS
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            build-essential \
+            git \
+            python3-colcon-common-extensions \
+            ros-jazzy-rmw-cyclonedds-cpp
+          rm -rf /var/lib/apt/lists/*
+
+      - uses: actions/checkout@v4
+
+      - name: Build
+        shell: bash
+        run: |
+          set -eo pipefail
+          source /opt/ros/jazzy/setup.bash
+          colcon build --base-paths ros2 --packages-select odomcal_ros --cmake-args -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=g++
+
+      - name: Test
+        shell: bash
+        env:
+          RMW_IMPLEMENTATION: rmw_cyclonedds_cpp
+          ROS_LOCALHOST_ONLY: "1"
+        run: |
+          set -eo pipefail
+          source /opt/ros/jazzy/setup.bash
+          colcon test --base-paths ros2 --packages-select odomcal_ros --event-handlers console_direct+
+          colcon test-result --verbose

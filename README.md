@@ -1,6 +1,7 @@
 # odomcal
 
 [![CI](https://github.com/a-haz/odomcal/actions/workflows/ci.yml/badge.svg)](https://github.com/a-haz/odomcal/actions/workflows/ci.yml)
+[![ROS 2 Jazzy](https://github.com/a-haz/odomcal/actions/workflows/ros2-jazzy.yml/badge.svg)](https://github.com/a-haz/odomcal/actions/workflows/ros2-jazzy.yml)
 
 odomcal measures and corrects the two dominant systematic odometry errors of a differential-drive robot: unequal wheel diameters and an incorrect track width. A seedable unicycle simulator executes the bidirectional square of the UMBmark procedure, the closed-form solution of Borenstein and Feng recovers the diameter ratio and the baseline ratio, and a linear least-squares fit recovers the left wheel radius, the right wheel radius, and the track width from the same logged runs. Held-out squares then report the systematic return-position error and the heading error before and after each correction.
 
@@ -110,7 +111,65 @@ python3 scripts/plot_benchmark.py
 
 `odomcal_bench` rewrites the CSV files above. The plot script reads them and writes `docs/emax_before_after.png` and `docs/trajectories.gif`.
 
-A ROS 2 node that applies these corrections to wheel-tick odometry is left as future work.
+## ROS 2 node
+
+`ros2/odomcal_ros` is an ament_cmake package for ROS 2 Jazzy. Its CMake file builds this repository with `add_subdirectory` and links the `odomcal` target. The wheel integration stays in `src/` and `include/odomcal`.
+
+`odomcal_node` subscribes to `sensor_msgs/JointState`. `left_wheel_joint` and `right_wheel_joint` select the wheels. With `use_velocities` false, the default, the node integrates position deltas. With `use_velocities` true it integrates `velocity * dt` from successive header stamps. Each step calls `odomcal::integrate` with the left radius `r_l`, the right radius `r_r`, and the track width `track_width`, then publishes `nav_msgs/Odometry` and, unless `publish_tf` is false, the `odom` to `base_link` transform. The three lengths are metres and must be positive.
+
+`config/default.yaml` is the parameter file loaded by `launch/odomcal.launch.py`. `config/calibration.yaml` is a flat file with `r_l`, `r_r`, and `track_width` (the key `b` is accepted as an alias for the track width). The launch file sets `calibration_file` to that flat file, and the node reads it at startup. Later steps keep the pose already integrated.
+
+```bash
+ros2 service call /odom_calibrator/set_calibration odomcal_ros/srv/SetCalibration "{r_l: 0.05, r_r: 0.05, track_width: 0.30}"
+ros2 service call /odom_calibrator/reload_calibration std_srvs/srv/Trigger
+```
+
+`set_calibration` applies the three values in the request. `reload_calibration` reads `calibration_file` again.
+
+Build and test from the repository root in a Jazzy environment. `--base-paths ros2` is required because the root `CMakeLists.txt` is the standalone library, so a crawl that starts at the root does not descend into this package.
+
+```bash
+source /opt/ros/jazzy/setup.bash
+colcon build --base-paths ros2 --packages-select odomcal_ros --cmake-args -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=g++
+colcon test --base-paths ros2 --packages-select odomcal_ros --event-handlers console_direct+
+colcon test-result --verbose
+source install/setup.bash
+ros2 launch odomcal_ros odomcal.launch.py
+```
+
+The node listens on `joint_states` and publishes `odom`. Pass another calibration file with:
+
+```bash
+ros2 launch odomcal_ros odomcal.launch.py calibration_file:=/path/to/calibration.yaml
+```
+
+Continuous integration for this package is `.github/workflows/ros2-jazzy.yml`. It runs `colcon build` and `colcon test` in the `ros:jazzy` image. The standalone workflow `.github/workflows/ci.yml` is unchanged.
+
+### Simulated square replay
+
+`replay_square` is a simulated replay, not a recording from a physical robot. It drives one counter-clockwise square in `odomcal::simulate`, publishes the encoder rotations as `sensor_msgs/JointState`, and records `nav_msgs/Odometry` from two running `odomcal_node` instances. The raw node uses the nominal wheel radius and track width. The corrected node loads the plant wheel radii and track width from a YAML file, so the correction is the known geometry of that simulated plant. Endpoint error is the planar distance from the simulated plant position at the end of the square to the odometry position the node published. Heading error is the absolute yaw difference at that pose.
+
+```bash
+source install/setup.bash
+ros2 run odomcal_ros replay_square --output ros2/odomcal_ros/demo/square_replay.csv
+```
+
+Every number below is copied from `ros2/odomcal_ros/demo/square_replay.csv`.
+
+The replay records `side_m` `4`, `steps_per_segment` `16`, `noise_std_rad` `0`, `ed` `1.002`, and `eb` `1.01`. Nominal geometry is `nominal_r_l_m` `0.05`, `nominal_r_r_m` `0.05`, `nominal_track_width_m` `0.3`. Plant geometry is `plant_r_l_m` `0.04995004995004996`, `plant_r_r_m` `0.05004995004995006`, `plant_track_width_m` `0.303`. After the YAML load, the corrected node reports the same three values: `corrected_parameter_r_l_m` `0.04995004995004996`, `corrected_parameter_r_r_m` `0.05004995004995006`, `corrected_parameter_track_width_m` `0.303`. The raw node reports `raw_parameter_r_l_m` `0.05`, `raw_parameter_r_r_m` `0.05`, `raw_parameter_track_width_m` `0.3`. Both nodes published `129` odometry messages (`raw_odom_messages` `129`, `corrected_odom_messages` `129`) from `joint_messages` `129`.
+
+The simulated plant finished at `ground_truth_x_m` `0.08861923920525433`, `ground_truth_y_m` `-0.0835455195184972`, `ground_truth_theta_rad` `0.04329530048348096`.
+
+| | raw | corrected |
+| --- | --- | --- |
+| x (m) | 1.165963023405459e-13 | 0.08861923920535794 |
+| y (m) | -1.1368683772161603e-13 | -0.08354551951860723 |
+| theta (rad) | -9.439671266875393e-14 | 0.04329530048338545 |
+| endpoint error (m) | 0.121791721347939 | 1.5113053650432164e-13 |
+| heading error (rad) | 0.043295300483575355 | 9.550693569337909e-14 |
+| heading error (deg) | 2.48063799045958 | 5.47214432945798e-12 |
+
+The distance between the raw and corrected endpoints is `raw_vs_corrected_endpoint_m` `0.12179172134808987`.
 
 ## References
 

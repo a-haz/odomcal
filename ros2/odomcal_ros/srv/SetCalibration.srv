@@ -1,0 +1,6 @@
+float64 r_l
+float64 r_r
+float64 track_width
+---
+bool success
+string message
