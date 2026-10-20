@@ -99,7 +99,7 @@ The animation is the first held-out clockwise square and the first held-out coun
 
 ## Build and run
 
-The library is C++17. CMake fetches Eigen 3.4.0 and GoogleTest 1.15.2. The plot script needs Python 3 with `matplotlib` and `pillow`.
+The library is C++17. CMake fetches Eigen 3.4.0 and GoogleTest 1.15.2. The plot script needs Python 3 with `matplotlib` and `pillow` (`python3 -m pip install -r scripts/requirements.txt`).
 
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=g++
