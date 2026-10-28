@@ -128,6 +128,10 @@ ros2 service call /odom_calibrator/reload_calibration std_srvs/srv/Trigger
 
 `set_calibration` applies the three values in the request. `reload_calibration` reads `calibration_file` again.
 
+Each line of the calibration file is a `key: value` pair with a numeric value, and `#` starts a comment. A missing or unknown key, a non-numeric value, or a value that is not positive stops the node at startup. The same problems make `reload_calibration` return `success: false` with the reason and keep the current values.
+
+Topic names and frames are parameters as well: `joint_states_topic`, `odom_topic`, `odom_frame` and `base_frame`, with defaults `joint_states`, `odom`, `odom` and `base_link`. The first joint state only records the starting wheel readings, so the node publishes the current pose with zero velocity for it.
+
 Build and test from the repository root in a Jazzy environment. `--base-paths ros2` is needed because the root `CMakeLists.txt` is the standalone library and colcon would not find the package otherwise.
 
 ```bash
