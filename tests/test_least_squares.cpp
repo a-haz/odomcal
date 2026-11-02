@@ -90,3 +90,35 @@ TEST(LeastSquares, CorrectedModelShrinksPoseError) {
     EXPECT_LT(std::hypot(after.x, after.y), std::hypot(before.x, before.y) / 20.0);
     EXPECT_LT(std::abs(after.theta), std::abs(before.theta) / 20.0);
 }
+
+TEST(LeastSquares, RejectsTooFewSamplesOrBadBaseline) {
+    const odomcal::WheelSample one{1.0, 1.0, 0.05, 0.0};
+    EXPECT_THROW(odomcal::calibrate_least_squares({}, 0.30), std::invalid_argument);
+    EXPECT_THROW(odomcal::calibrate_least_squares({one}, 0.30), std::invalid_argument);
+    EXPECT_THROW(odomcal::calibrate_least_squares({one, one}, 0.0), std::invalid_argument);
+}
+
+TEST(LeastSquares, SpinInPlaceIsRankDeficient) {
+    // Spinning gives ds = 0, so the rows only fix r_R = r_L and b in terms of r_L.
+    // The overall scale is free, so the rank is 2, not 3.
+    const odomcal::WheelSample spin{-1.0, 1.0, 0.0, 1.0 / 3.0};
+    const std::vector<odomcal::WheelSample> samples(10, spin);
+    EXPECT_THROW(odomcal::calibrate_least_squares(samples, 0.30), std::runtime_error);
+}
+
+TEST(LeastSquares, HandBuiltPerfectRobotIsIdentity) {
+    // Perfect robot: r_L = r_R = 0.05 m, b = 0.30 m.
+    // Straight: both wheels turn 1 rad, so ds = 0.05 * 1 = 0.05 m and dth = 0.
+    // Spin: wheels turn -1 and +1 rad, so ds = 0 and dth = (0.05 + 0.05) / 0.30 = 1/3 rad.
+    const std::vector<odomcal::WheelSample> samples{
+        {1.0, 1.0, 0.05, 0.0},
+        {-1.0, 1.0, 0.0, 1.0 / 3.0},
+    };
+    const odomcal::LsEstimate estimate = odomcal::calibrate_least_squares(samples, 0.30);
+    EXPECT_NEAR(estimate.params.r_l, 0.05, 1e-12);
+    EXPECT_NEAR(estimate.params.r_r, 0.05, 1e-12);
+    EXPECT_NEAR(estimate.params.b, 0.30, 1e-12);
+    EXPECT_NEAR(estimate.ed, 1.0, 1e-12);
+    EXPECT_NEAR(estimate.eb, 1.0, 1e-12);
+    EXPECT_NEAR(estimate.residual_rms_m, 0.0, 1e-12);  // four equations, all exact
+}

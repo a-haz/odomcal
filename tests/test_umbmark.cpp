@@ -123,3 +123,57 @@ TEST(Umbmark, PureBaselineSplitsLateralErrorByDirection) {
     EXPECT_NEAR(cw.theta, -ccw.theta, 1e-9);
     EXPECT_GT(std::abs(cw.y), 0.05);
 }
+
+TEST(Umbmark, RejectsNonPositiveSideOrBaseline) {
+    const auto zeros = repeat_pose(odomcal::Pose{}, 5);
+    EXPECT_THROW(odomcal::calibrate_umbmark(zeros, zeros, 0.0, 0.30), std::invalid_argument);
+    EXPECT_THROW(odomcal::calibrate_umbmark(zeros, zeros, 4.0, -0.30), std::invalid_argument);
+    EXPECT_THROW(odomcal::mean_abs_heading({}), std::invalid_argument);
+}
+
+TEST(Umbmark, ZeroReturnErrorGivesIdentityCorrection) {
+    // A perfect robot returns exactly to the start, so both centroids are at the origin.
+    // Then alpha = beta = 0, Eb = 90 / 90 = 1 and Ed = 1, and c_L = c_R = 2 / 2 = 1.
+    const auto zeros = repeat_pose(odomcal::Pose{}, 5);
+    const odomcal::UmbmarkEstimate estimate = odomcal::calibrate_umbmark(zeros, zeros, 4.0, 0.30);
+    EXPECT_DOUBLE_EQ(estimate.alpha_rad, 0.0);
+    EXPECT_DOUBLE_EQ(estimate.beta_rad, 0.0);
+    EXPECT_DOUBLE_EQ(estimate.ed, 1.0);
+    EXPECT_DOUBLE_EQ(estimate.eb, 1.0);
+    EXPECT_DOUBLE_EQ(estimate.c_l, 1.0);
+    EXPECT_DOUBLE_EQ(estimate.c_r, 1.0);
+    // Applying an identity correction must give back the nominal parameters.
+    const odomcal::DiffDriveParams corrected = odomcal::apply_umbmark_correction(1.0, 1.0, 0.05, 0.30);
+    EXPECT_DOUBLE_EQ(corrected.r_l, 0.05);
+    EXPECT_DOUBLE_EQ(corrected.r_r, 0.05);
+    EXPECT_DOUBLE_EQ(corrected.b, 0.30);
+}
+
+TEST(Umbmark, SameXErrorBothWaysIsPureTypeA) {
+    // x_cw = x_ccw = 0.4 m with L = 4 m:
+    //   alpha = (0.4 + 0.4) / (-16) = -0.05 rad, beta = (0.4 - 0.4) / (-16) = 0.
+    // beta = 0 means no diameter error, so Ed stays 1 and only Eb moves.
+    const auto errors = repeat_pose(odomcal::Pose{0.4, 0.0, 0.0}, 5);
+    const odomcal::UmbmarkEstimate estimate = odomcal::calibrate_umbmark(errors, errors, 4.0, 0.30);
+    EXPECT_NEAR(estimate.alpha_rad, -0.05, 1e-12);
+    EXPECT_NEAR(estimate.beta_rad, 0.0, 1e-12);
+    EXPECT_DOUBLE_EQ(estimate.ed, 1.0);
+    const double alpha_deg = -0.05 * 180.0 / odomcal::kPi;
+    EXPECT_NEAR(estimate.eb, 90.0 / (90.0 - alpha_deg), 1e-12);
+}
+
+TEST(Umbmark, OppositeXErrorIsPureTypeB) {
+    // x_cw = 0.4 m, x_ccw = -0.4 m with L = 4 m:
+    //   alpha = 0 / (-16) = 0, so Eb = 1.
+    //   beta = 0.8 / (-16) = -0.05 rad, R = (L / 2) / sin(beta / 2) = 2 / sin(-0.025).
+    //   Ed = (R + b/2) / (R - b/2) with b/2 = 0.15.
+    const auto cw = repeat_pose(odomcal::Pose{0.4, 0.0, 0.0}, 5);
+    const auto ccw = repeat_pose(odomcal::Pose{-0.4, 0.0, 0.0}, 5);
+    const odomcal::UmbmarkEstimate estimate = odomcal::calibrate_umbmark(cw, ccw, 4.0, 0.30);
+    EXPECT_NEAR(estimate.alpha_rad, 0.0, 1e-12);
+    EXPECT_NEAR(estimate.beta_rad, -0.05, 1e-12);
+    EXPECT_DOUBLE_EQ(estimate.eb, 1.0);
+    const double radius = 2.0 / std::sin(-0.025);
+    EXPECT_NEAR(estimate.ed, (radius + 0.15) / (radius - 0.15), 1e-12);
+    EXPECT_LT(estimate.ed, 1.0);  // R is negative, so the left wheel is the larger one
+}
