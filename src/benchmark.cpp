@@ -25,15 +25,14 @@ std::vector<Pose> return_errors(const std::vector<SimRun>& runs) {
     return errors;
 }
 
-double centroid_radius(const std::vector<SimRun>& runs) {
+double centroid_radius(const std::vector<Pose>& errors) {
     double x = 0.0;
     double y = 0.0;
-    for (const SimRun& run : runs) {
-        const Pose error = run.return_error();
+    for (const Pose& error : errors) {
         x += error.x;
         y += error.y;
     }
-    const double n = static_cast<double>(runs.size());
+    const double n = static_cast<double>(errors.size());
     return std::hypot(x / n, y / n);
 }
 
@@ -41,19 +40,13 @@ Score score_trials(const TrialSet& trials) {
     if (trials.cw.empty() || trials.ccw.empty()) {
         throw std::invalid_argument("scoring requires both directions");
     }
-    double heading_sum = 0.0;
-    int count = 0;
-    for (const SimRun& run : trials.cw) {
-        heading_sum += std::abs(run.return_error().theta);
-        ++count;
-    }
-    for (const SimRun& run : trials.ccw) {
-        heading_sum += std::abs(run.return_error().theta);
-        ++count;
-    }
+    const std::vector<Pose> cw = return_errors(trials.cw);
+    const std::vector<Pose> ccw = return_errors(trials.ccw);
+    std::vector<Pose> both = cw;
+    both.insert(both.end(), ccw.begin(), ccw.end());
     Score score;
-    score.e_max_syst = std::max(centroid_radius(trials.cw), centroid_radius(trials.ccw));
-    score.heading_deg = (heading_sum / static_cast<double>(count)) * (180.0 / kPi);
+    score.e_max_syst = std::max(centroid_radius(cw), centroid_radius(ccw));
+    score.heading_deg = mean_abs_heading(both) * (180.0 / kPi);
     return score;
 }
 
