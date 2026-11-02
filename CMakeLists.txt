@@ -80,6 +80,12 @@ if(ODOM_CAL_BUILD_TESTS)
     target_include_directories(odomcal_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
     target_link_libraries(odomcal_tests PRIVATE odomcal GTest::gtest_main)
     target_compile_options(odomcal_tests PRIVATE -Wall -Wextra -Wpedantic -Werror)
+    if(ODOM_CAL_BUILD_BENCH)
+        # test_bench_cli.cpp runs the benchmark executable.
+        target_sources(odomcal_tests PRIVATE tests/test_bench_cli.cpp)
+        target_compile_definitions(odomcal_tests PRIVATE ODOMCAL_BENCH_EXE="$<TARGET_FILE:odomcal_bench>")
+        add_dependencies(odomcal_tests odomcal_bench)
+    endif()
 
     include(GoogleTest)
     gtest_discover_tests(odomcal_tests DISCOVERY_MODE PRE_TEST)
