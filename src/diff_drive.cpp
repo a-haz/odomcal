@@ -6,8 +6,10 @@
 namespace odomcal {
 
 double wrap_angle(double theta_rad) {
-    // std::remainder yields (-pi, pi], with the pi/-pi tie kept at +pi.
-    return std::remainder(theta_rad, 2.0 * kPi);
+    // std::remainder yields [-pi, pi]: a tie rounds the quotient to even, which
+    // keeps -pi at -pi. Fold that endpoint onto +pi.
+    const double wrapped = std::remainder(theta_rad, 2.0 * kPi);
+    return wrapped <= -kPi ? wrapped + 2.0 * kPi : wrapped;
 }
 
 std::string to_string(Direction direction) {

@@ -150,6 +150,19 @@ TEST(Kinematics, WrapAngleStaysInRange) {
     EXPECT_LE(std::abs(wrap_angle(8.0)), kPi);
 }
 
+TEST(Kinematics, WrapAngleKeepsTheMinusPiTieAtPlusPi) {
+    // std::remainder used to return -pi here, outside the documented (-pi, pi].
+    EXPECT_DOUBLE_EQ(wrap_angle(-kPi), kPi);
+    EXPECT_DOUBLE_EQ(wrap_angle(kPi), kPi);
+    const double three_pi = wrap_angle(3.0 * kPi);
+    EXPECT_GT(three_pi, -kPi);
+    EXPECT_LE(three_pi, kPi);
+    // A clockwise half turn integrates to exactly -pi before wrapping.
+    const DiffDriveParams params = test_nominal();
+    const double dphi_r = (-kPi * params.b / 2.0) / params.r_r;
+    EXPECT_DOUBLE_EQ(drive(Pose{}, -dphi_r, dphi_r, params).theta, kPi);
+}
+
 TEST(Kinematics, RejectsNonPositiveGeometry) {
     DiffDriveParams params = test_nominal();
     params.b = 0.0;
